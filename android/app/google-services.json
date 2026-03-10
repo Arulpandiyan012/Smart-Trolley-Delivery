@@ -1,0 +1,48 @@
+{
+    "project_info": {
+        "project_number": "633818390250",
+        "project_id": "smart-trolley-delivery",
+        "storage_bucket": "smart-trolley-delivery.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:633818390250:android:ec609ea0a1a6dc1e704193",
+                "android_client_info": {
+                    "package_name": "com.smarttrolley.delivery"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyBDDph_PavCoqrmoSjBiZvoDAZOkKhYoq4"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        },
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:633818390250:android:6b0e7d27bd79848c704193",
+                "android_client_info": {
+                    "package_name": "ecom.thesmartedgetech.com"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyBDDph_PavCoqrmoSjBiZvoDAZOkKhYoq4"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}
