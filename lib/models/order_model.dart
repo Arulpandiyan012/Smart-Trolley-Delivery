@@ -5,6 +5,8 @@ class OrderModel {
   final String total;
   final String date;
   final String customerName;
+  final String customerPhone;
+  final String customerAddress;
   final String items;
 
   OrderModel({
@@ -14,6 +16,8 @@ class OrderModel {
     required this.total,
     required this.date,
     required this.customerName,
+    required this.customerPhone,
+    required this.customerAddress,
     required this.items,
   });
 
@@ -25,6 +29,8 @@ class OrderModel {
       total: json['total'] ?? '',
       date: json['date'] ?? '',
       customerName: json['customer_name'] ?? '',
+      customerPhone: json['customer_phone'] ?? 'N/A',
+      customerAddress: json['customer_address'] ?? 'Address not found',
       items: json['items'] ?? '',
     );
   }

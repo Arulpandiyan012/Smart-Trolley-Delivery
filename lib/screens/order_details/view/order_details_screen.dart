@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_trolley_delivery/models/order_model.dart';
 import 'package:smart_trolley_delivery/screens/dashboard/bloc/dashboard_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
   final OrderModel order;
@@ -10,11 +11,18 @@ class OrderDetailsScreen extends StatelessWidget {
   const OrderDetailsScreen({Key? key, required this.order}) : super(key: key);
 
   Future<void> _launchMaps(String destination) async {
-    final url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=\$destination',
+    // Try native Google Maps navigation first (Android/iOS)
+    final nativeUrl = Uri.parse(
+      'google.navigation:q=${Uri.encodeComponent(destination)}&mode=d',
     );
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+    final webUrl = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(destination)}&travelmode=driving',
+    );
+    
+    if (await canLaunchUrl(nativeUrl)) {
+      await launchUrl(nativeUrl);
+    } else if (await canLaunchUrl(webUrl)) {
+      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
     } else {
       debugPrint('Could not launch directions');
     }
@@ -38,7 +46,7 @@ class OrderDetailsScreen extends StatelessWidget {
     ].contains(order.status.toLowerCase());
 
     return Scaffold(
-      appBar: AppBar(title: Text('Order \${order.orderNumber}')),
+      appBar: AppBar(title: Text('Order ${order.orderNumber}')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -104,8 +112,8 @@ class OrderDetailsScreen extends StatelessWidget {
                         ),
                         IconButton(
                           icon: const Icon(Icons.phone, color: Colors.blue),
-                          // Placeholder phone number - in real app, get from order specifics
-                          onPressed: () => _makePhoneCall('9876543210'),
+                          // Real phone number from backend
+                          onPressed: () => _makePhoneCall(order.customerPhone),
                         ),
                       ],
                     ),
@@ -114,16 +122,16 @@ class OrderDetailsScreen extends StatelessWidget {
                       children: [
                         const Icon(Icons.location_on, color: Colors.red),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            '123 Delivery Street, Example City, EX 12345',
-                            style: TextStyle(fontSize: 14),
-                          ), // Placeholder address
+                            order.customerAddress,
+                            style: const TextStyle(fontSize: 14),
+                          ), 
                         ),
                         IconButton(
                           icon: const Icon(Icons.map, color: Colors.blue),
                           onPressed: () =>
-                              _launchMaps('123 Delivery Street, Example City'),
+                              _launchMaps(order.customerAddress),
                         ),
                       ],
                     ),
@@ -162,7 +170,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '\${order.total}',
+                          order.total,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -203,18 +211,44 @@ class OrderDetailsScreen extends StatelessWidget {
                       ),
                     if (order.status.toLowerCase() == 'picked_up' ||
                         order.status.toLowerCase() == 'picked up')
-                      ElevatedButton(
-                        onPressed: () {
-                          context.read<DashboardBloc>().add(
-                            UpdateOrderStatusEvent(order.id, 'delivered'),
-                          );
-                          Navigator.pop(context);
-                        },
-                        child: const Text(
-                          'Mark as Delivered',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () {
+                              context.read<DashboardBloc>().add(
+                                StartTripEvent(order.id),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Trip Started. Tracking Live...')),
+                              );
+                            },
+                            child: const Text(
+                              '🚀 Start the Trip',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: () {
+                              context.read<DashboardBloc>().add(
+                                UpdateOrderStatusEvent(order.id, 'delivered'),
+                              );
+                              Navigator.pop(context);
+                            },
+                            child: const Text(
+                              'Mark as Delivered',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        ],
                       ),
+                    
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),

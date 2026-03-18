@@ -12,6 +12,36 @@ class LocationTrackingService {
   Timer? _trackingTimer;
   String? _currentOrderId;
 
+  Future<void> startTrip(String orderId) async {
+    _currentOrderId = orderId;
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 5),
+      );
+      
+      final dio = Dio();
+      await dio.post(
+        'https://ecom.thesmartedgetech.com/tracking-api.php',
+        data: {
+          'action': 'start_trip',
+          'order_id': orderId.replaceAll('#', ''),
+          'driver_id': '0',
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        }
+      );
+      debugPrint("🏁 Trip Started for Order $orderId");
+      
+      // Also start the polling immediately
+      startTracking(orderId);
+    } catch (e) {
+      debugPrint("⚠️ Trip Start Error: $e");
+      // Fallback to regular tracking if start_trip fails
+      startTracking(orderId);
+    }
+  }
+
   Future<void> startTracking(String orderId) async {
     _currentOrderId = orderId;
     
