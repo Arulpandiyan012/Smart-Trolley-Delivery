@@ -22,6 +22,14 @@ class UpdateOrderStatusEvent extends DashboardEvent {
   List<Object> get props => [orderId, newStatus];
 }
 
+class StartTripEvent extends DashboardEvent {
+  final int orderId;
+  const StartTripEvent(this.orderId);
+
+  @override
+  List<Object> get props => [orderId];
+}
+
 // --- States ---
 abstract class DashboardState extends Equatable {
   const DashboardState();
@@ -91,6 +99,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       } catch (e) {
         emit(DashboardError('Update failed: $e'));
       }
+    });
+    on<StartTripEvent>((event, emit) async {
+       try {
+         // Optionally update a "trip_started" flag on backend if needed
+         // For now, we just initialize the tracking service's startTrip
+         await LocationTrackingService().startTrip(event.orderId.toString());
+         add(FetchOrdersEvent()); // Refresh lists to show "Trip Started" UI if any
+       } catch (e) {
+         emit(DashboardError('Failed to start trip: $e'));
+       }
     });
   }
 }

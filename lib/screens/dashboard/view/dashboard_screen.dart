@@ -171,7 +171,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: _buildIconText(Icons.payments, 'Total: \${order.total}'),
+                        child: _buildIconText(Icons.payments, 'Total: ${order.total}'),
                       ),
                       if (isActive)
                         ElevatedButton.icon(
