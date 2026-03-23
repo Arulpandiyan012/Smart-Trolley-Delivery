@@ -21,7 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return BlocProvider(
       create: (context) => DashboardBloc(repository: DashboardRepository())..add(FetchOrdersEvent()),
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: WillPopScope(
           onWillPop: () async {
             if (_currentIndex != 0) {
@@ -38,7 +38,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bottom: const TabBar(
               indicatorColor: Colors.white,
               tabs: [
-                Tab(text: 'Active Orders'),
+                Tab(text: 'Active'),
+                Tab(text: 'Available'),
                 Tab(text: 'History'),
               ],
             ),
@@ -71,8 +72,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               } else if (state is DashboardLoaded) {
                 return TabBarView(
                   children: [
-                    _buildOrderList(context, state.activeOrders, true),
-                    _buildOrderList(context, state.historyOrders, false),
+                    _buildOrderList(context, state.activeOrders, 'active'),
+                    _buildOrderList(context, state.availableOrders, 'available'),
+                    _buildOrderList(context, state.historyOrders, 'history'),
                   ],
                 );
               }
@@ -103,16 +105,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ); // return
   }
 
-  Widget _buildOrderList(BuildContext context, List<OrderModel> orders, bool isActive) {
+  Widget _buildOrderList(BuildContext context, List<OrderModel> orders, String type) {
     if (orders.isEmpty) {
+      String message = 'No past deliveries yet.';
+      IconData icon = Icons.history;
+      if (type == 'active') {
+        message = 'No active deliveries.';
+        icon = Icons.inbox;
+      } else if (type == 'available') {
+        message = 'No available orders nearby.';
+        icon = Icons.local_shipping_outlined;
+      }
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(isActive ? Icons.inbox : Icons.history, size: 64, color: Colors.grey[400]),
+            Icon(icon, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            Text(isActive ? 'No active deliveries.' : 'No past deliveries yet.', 
-                style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+            Text(message, style: TextStyle(color: Colors.grey[600], fontSize: 16)),
           ],
         ),
       );
@@ -173,7 +184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Expanded(
                         child: _buildIconText(Icons.payments, 'Total: ${order.total}'),
                       ),
-                      if (isActive)
+                      if (type == 'active')
                         ElevatedButton.icon(
                           onPressed: () {
                             Navigator.push(
@@ -192,7 +203,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                        )
+                        ),
+                      if (type == 'available')
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('Accept Order'),
+                                content: Text('Do you want to accept order ${order.orderNumber}?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(dialogContext),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      context.read<DashboardBloc>().add(AcceptOrderEvent(order.id));
+                                      Navigator.pop(dialogContext);
+                                    },
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                    child: const Text('Accept', style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.check_circle_outline, size: 16),
+                          label: const Text('Accept'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
                     ],
                   )
                 ],
