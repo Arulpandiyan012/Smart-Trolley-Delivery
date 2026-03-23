@@ -13,6 +13,16 @@ abstract class DashboardEvent extends Equatable {
 
 class FetchOrdersEvent extends DashboardEvent {}
 
+class FetchAvailableOrdersEvent extends DashboardEvent {}
+
+class AcceptOrderEvent extends DashboardEvent {
+  final int orderId;
+  const AcceptOrderEvent(this.orderId);
+
+  @override
+  List<Object> get props => [orderId];
+}
+
 class UpdateOrderStatusEvent extends DashboardEvent {
   final int orderId;
   final String newStatus;
@@ -44,14 +54,16 @@ class DashboardLoading extends DashboardState {}
 class DashboardLoaded extends DashboardState {
   final List<OrderModel> activeOrders;
   final List<OrderModel> historyOrders;
+  final List<OrderModel> availableOrders;
 
   const DashboardLoaded({
     required this.activeOrders,
     required this.historyOrders,
+    this.availableOrders = const [],
   });
 
   @override
-  List<Object> get props => [activeOrders, historyOrders];
+  List<Object> get props => [activeOrders, historyOrders, availableOrders];
 }
 
 class DashboardError extends DashboardState {
@@ -70,14 +82,27 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       emit(DashboardLoading());
       try {
         final response = await repository.getOrders();
+        final available = await repository.getAvailableOrders();
         emit(
           DashboardLoaded(
             activeOrders: response.activeOrders,
             historyOrders: response.historyOrders,
+            availableOrders: available,
           ),
         );
       } catch (e) {
         emit(DashboardError(e.toString().replaceAll('Exception: ', '')));
+      }
+    });
+
+    on<AcceptOrderEvent>((event, emit) async {
+      try {
+        final success = await repository.acceptOrder(event.orderId);
+        if (success) {
+          add(FetchOrdersEvent()); // Refresh lists
+        }
+      } catch (e) {
+        emit(DashboardError('Failed to accept order: $e'));
       }
     });
 
