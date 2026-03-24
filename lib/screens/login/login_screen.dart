@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smart_trolley_delivery/screens/login/auth_repository.dart';
+import 'package:smart_trolley_delivery/utils/validation_utils.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -15,9 +16,29 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   void _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    final input = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
+        const SnackBar(content: Text('Please enter email or phone number')),
+      );
+      return;
+    }
+
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter password')),
+      );
+      return;
+    }
+
+    final isPhone = ValidationUtils.isValidPhone(input);
+    final isEmail = ValidationUtils.isValidEmail(input);
+
+    if (!isPhone && !isEmail) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email or 10-digit phone number')),
       );
       return;
     }
