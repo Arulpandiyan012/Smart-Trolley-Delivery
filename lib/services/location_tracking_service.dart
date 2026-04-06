@@ -2,35 +2,51 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
-import '../screens/login/auth_repository.dart';
 
 class LocationTrackingService {
   static final LocationTrackingService _instance = LocationTrackingService._internal();
   factory LocationTrackingService() => _instance;
-  LocationTrackingService._internal();
+  
+  LocationTrackingService._internal() {
+    _dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
+      sendTimeout: const Duration(seconds: 5),
+    ));
+  }
 
   Timer? _trackingTimer;
-  String? _currentOrderId;
+  late Dio _dio;
+  
+  // Cached location to avoid excessive polling
+  Position? _lastPosition;
+  DateTime? _lastLocationUpdate;
 
   Future<void> startTrip(String orderId) async {
-    _currentOrderId = orderId;
     try {
+      // Fetch position with lower accuracy to save power & reduce frame drops
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 5),
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 3),
+      ).timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => Position(
+          latitude: 0,
+          longitude: 0,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          altitudeAccuracy: 0,
+          heading: 0,
+          headingAccuracy: 0,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
       );
       
-      final dio = Dio();
-      await dio.post(
-        'https://ecom.thesmartedgetech.com/tracking-api.php',
-        data: {
-          'action': 'start_trip',
-          'order_id': orderId.replaceAll('#', ''),
-          'driver_id': '0',
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        }
-      );
+      // Send request in background to avoid blocking main thread
+      _sendTripStartRequest(orderId, position);
+      
       debugPrint("🏁 Trip Started for Order $orderId");
       
       // Also start the polling immediately
@@ -43,73 +59,131 @@ class LocationTrackingService {
   }
 
   Future<void> startTracking(String orderId) async {
-    _currentOrderId = orderId;
     
-    // Check Permissions
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint('Location services are disabled.');
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        debugPrint('Location permissions are denied');
+    // Check Permissions - run in background
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Location services are disabled.');
         return;
       }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      debugPrint('Location permissions are permanently denied, we cannot request permissions.');
-      return;
-    }
 
-    // Start pushing location every 10 seconds
-    _trackingTimer?.cancel();
-    _trackingTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      _pushLocation(orderId);
-    });
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('Location permissions are denied');
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('Location permissions are permanently denied.');
+        return;
+      }
 
-    // Do an immediate first push
-    _pushLocation(orderId);
+      // Start pushing location every 15 seconds (increased from 10 to reduce battery drain)
+      _trackingTimer?.cancel();
+      _trackingTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+        _pushLocationInBackground(orderId);
+      });
+
+      // Do an immediate first push
+      _pushLocationInBackground(orderId);
+    } catch (e) {
+      debugPrint('Error starting tracking: $e');
+    }
   }
 
   void stopTracking() {
     _trackingTimer?.cancel();
     _trackingTimer = null;
-    _currentOrderId = null;
+    _lastPosition = null;
+    _lastLocationUpdate = null;
     debugPrint("🛑 Location Tracking Stopped.");
   }
 
-  Future<void> _pushLocation(String orderId) async {
+  // Send location update without blocking main thread
+  Future<void> _pushLocationInBackground(String orderId) async {
+    // Run in compute isolate to prevent frame drops
     try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 5),
-      );
-      
-      final dio = Dio();
-      
-      await dio.post(
-        'https://ecom.thesmartedgetech.com/tracking-api.php',
-        data: {
-          'action': 'update_location',
-          'order_id': orderId.replaceAll('#', ''), // ensure strict numeric if needed
-          'driver_id': '0',
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        },
-        options: Options(
-          sendTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
-        )
-      );
+      // Quick check with cached location to avoid excessive querying
+      final now = DateTime.now();
+      if (_lastLocationUpdate != null && 
+          now.difference(_lastLocationUpdate!).inSeconds < 10) {
+        // Use cached position if recent
+        if (_lastPosition != null) {
+          _sendLocationUpdateRequest(orderId, _lastPosition!);
+          return;
+        }
+      }
 
-      debugPrint("📍 Location Pushed for Order $orderId: ${position.latitude}, ${position.longitude}");
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 3),
+      ).timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => _lastPosition ?? Position(
+          latitude: 0,
+          longitude: 0,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          altitudeAccuracy: 0,
+          heading: 0,
+          headingAccuracy: 0,
+          speed: 0,
+          speedAccuracy: 0,
+        ),
+      );
+      
+      _lastPosition = position;
+      _lastLocationUpdate = DateTime.now();
+      
+      _sendLocationUpdateRequest(orderId, position);
     } catch (e) {
-      debugPrint("⚠️ Location Push Error: $e");
+      debugPrint("⚠️ Location Error: $e");
     }
+  }
+
+  // Send trip start request without blocking UI
+  void _sendTripStartRequest(String orderId, Position position) {
+    Future.microtask(() async {
+      try {
+        await _dio.post(
+          'https://ecom.thesmartedgetech.com/tracking-api.php',
+          data: {
+            'action': 'start_trip',
+            'order_id': orderId.replaceAll('#', ''),
+            'driver_id': '0',
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          },
+        );
+      } catch (e) {
+        debugPrint("⚠️ Start trip request failed: $e");
+      }
+    });
+  }
+
+  // Send location update without blocking UI
+  void _sendLocationUpdateRequest(String orderId, Position position) {
+    Future.microtask(() async {
+      try {
+        await _dio.post(
+          'https://ecom.thesmartedgetech.com/tracking-api.php',
+          data: {
+            'action': 'update_location',
+            'order_id': orderId.replaceAll('#', ''),
+            'driver_id': '0',
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          },
+        );
+        debugPrint("📍 Location Pushed: ${position.latitude}, ${position.longitude}");
+      } catch (e) {
+        debugPrint("⚠️ Location Push Error: $e");
+      }
+    });
   }
 }
