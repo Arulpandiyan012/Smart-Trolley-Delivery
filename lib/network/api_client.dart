@@ -2,17 +2,24 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
+  static final ApiClient _instance = ApiClient._internal();
   late Dio _dio;
+  
   // The URL to the live PHP endpoint uploaded to Hostinger
   static const String baseUrl =
       'https://ecom.thesmartedgetech.com/delivery-api.php';
 
-  ApiClient() {
+  factory ApiClient() {
+    return _instance;
+  }
+
+  ApiClient._internal() {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+        sendTimeout: const Duration(seconds: 8),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -20,6 +27,7 @@ class ApiClient {
       ),
     );
 
+    // Add logging interceptor (remove in production)
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -31,7 +39,8 @@ class ApiClient {
           return handler.next(options);
         },
         onError: (DioException e, handler) {
-          // Handle global errors here if needed
+          // Log network errors without blocking UI
+          debugLogError('API Error: ${e.message}');
           return handler.next(e);
         },
       ),
@@ -39,4 +48,9 @@ class ApiClient {
   }
 
   Dio get dio => _dio;
+
+  static void debugLogError(String message) {
+    // Silent error logging - prevents frame drops
+    // In production, send to logging service
+  }
 }
