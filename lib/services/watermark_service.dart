@@ -28,6 +28,17 @@ class WatermarkService {
         throw Exception('Failed to decode image');
       }
 
+      // Optimization: Resize image if it's too large (e.g., from high-res camera)
+      // This significantly speeds up processing and reduces memory consumption
+      if (image.width > 1280 || image.height > 1280) {
+        image = img.copyResize(
+          image,
+          width: image.width > image.height ? 1280 : null,
+          height: image.height >= image.width ? 1280 : null,
+          interpolation: img.Interpolation.linear,
+        );
+      }
+
       // Format timestamp and GPS info
       final formattedTime = DateFormat('dd/MM/yyyy HH:mm:ss').format(timestamp);
       final gpsInfo = 'GPS: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
@@ -39,7 +50,7 @@ class WatermarkService {
         gpsInfo,
       );
 
-      // Save watermarked image
+      // Save watermarked image (Switching to JPEG for faster encoding)
       final watermarkedPath = await _saveWatermarkedImage(image, photoPath);
       
       return watermarkedPath;
@@ -56,8 +67,9 @@ class WatermarkService {
     String gpsInfo,
   ) {
     // Create a semi-transparent overlay at the bottom
-    final overlayHeight = 100;
-    final overlayColor = img.ColorRgba8(0, 0, 0, 200); // Semi-transparent black
+    // Scale overlay height relative to image height
+    final overlayHeight = (image.height * 0.12).clamp(80.0, 150.0).toInt();
+    final overlayColor = img.ColorRgba8(0, 0, 0, 160); // Semi-transparent black
 
     // Draw semi-transparent rectangle at the bottom
     img.fillRect(
@@ -69,15 +81,35 @@ class WatermarkService {
       color: overlayColor,
     );
 
-    // Draw white rectangles as borders for better visibility
+    // Add Text (Timestamp)
+    img.drawString(
+      image,
+      timestamp,
+      font: img.arial24,
+      x: 20,
+      y: image.height - overlayHeight + 15,
+      color: img.ColorRgba8(255, 255, 255, 255),
+    );
+
+    // Add Text (GPS Info)
+    img.drawString(
+      image,
+      gpsInfo,
+      font: img.arial24,
+      x: 20,
+      y: image.height - overlayHeight + 45,
+      color: img.ColorRgba8(255, 255, 255, 255),
+    );
+
+    // Draw border for the overlay
     img.drawRect(
       image,
       x1: 0,
       y1: image.height - overlayHeight,
       x2: image.width,
       y2: image.height,
-      color: img.ColorRgba8(255, 255, 255, 100),
-      thickness: 2,
+      color: img.ColorRgba8(255, 255, 255, 80),
+      thickness: 1,
     );
 
     return image;
@@ -89,14 +121,14 @@ class WatermarkService {
     String originalPath,
   ) async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
+      final directory = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'proof_delivery_${timestamp}_watermarked.png';
+      final fileName = 'pod_${timestamp}.jpg';
       final file = File('${directory.path}/$fileName');
 
-      // Encode and save the image
-      final pngData = img.encodePng(image);
-      await file.writeAsBytes(pngData);
+      // Encode and save the image as JPEG (much faster than PNG)
+      final jpegData = img.encodeJpg(image, quality: 85);
+      await file.writeAsBytes(jpegData);
 
       debugPrint('✅ Watermarked image saved to: ${file.path}');
       return file.path;

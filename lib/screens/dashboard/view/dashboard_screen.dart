@@ -5,6 +5,7 @@ import 'package:smart_trolley_delivery/screens/dashboard/bloc/dashboard_reposito
 import 'package:smart_trolley_delivery/models/order_model.dart';
 import 'package:smart_trolley_delivery/screens/profile/view/profile_screen.dart';
 import 'package:smart_trolley_delivery/screens/order_details/view/order_details_screen.dart';
+import 'package:smart_trolley_delivery/services/location_tracking_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,6 +23,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _dashboardBloc = DashboardBloc(repository: DashboardRepository())
       ..add(FetchOrdersEvent());
+    
+    // Proactively request location permissions on dashboard entry
+    _requestLocationPermission();
+  }
+
+  Future<void> _requestLocationPermission() async {
+    await LocationTrackingService().handleLocationPermission();
   }
 
   @override
