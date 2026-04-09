@@ -85,6 +85,9 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
           _selectedPhotoPath = photo.path;
         });
         debugPrint('📷 Photo captured: ${photo.path}');
+        
+        // Automatically add watermark
+        await _addWatermarkToPhoto(silent: true);
       }
     } catch (e) {
       setState(() {
@@ -120,6 +123,9 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
           _selectedPhotoPath = photo.path;
         });
         debugPrint('🖼️ Photo selected: ${photo.path}');
+        
+        // Automatically add watermark
+        await _addWatermarkToPhoto(silent: true);
       }
     } catch (e) {
       setState(() {
@@ -134,15 +140,19 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
   }
 
   /// Add watermark to the selected photo
-  Future<void> _addWatermarkToPhoto() async {
+  Future<void> _addWatermarkToPhoto({bool silent = false}) async {
     if (_selectedPhotoPath == null) {
-      _showDialog('No Photo', 'Please capture or select a photo first');
+      if (!silent) _showDialog('No Photo', 'Please capture or select a photo first');
       return;
     }
 
     if (_currentPosition == null) {
-      _showDialog('Location Required', 'Location data is required for watermarking');
-      return;
+      // If location is not ready, try to get it again
+      await _getCurrentLocation();
+      if (_currentPosition == null) {
+        if (!silent) _showDialog('Location Required', 'Location data is required for watermarking');
+        return;
+      }
     }
 
     try {
@@ -162,7 +172,7 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
         _watermarkedPhotoPath = watermarkedPath;
       });
 
-      _showDialog('Success', 'Watermark added successfully');
+      if (!silent) _showDialog('Success', 'Watermark added successfully');
       debugPrint('✨ Watermark added: $watermarkedPath');
     } catch (e) {
       setState(() {
@@ -341,121 +351,124 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Photo Capture Section
-            const Text(
-              'Step 1: Capture Photo',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
+            // Captured/Watermarked Photo Section
             if (_selectedPhotoPath != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      File(_selectedPhotoPath!),
-                      height: 250,
-                      fit: BoxFit.cover,
-                    ),
+                  const Text(
+                    'Step 2: Verify & Upload',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: _isCapturingPhoto ? null : _clearPhotos,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retake Photo'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                    ),
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          File(_watermarkedPhotoPath ?? _selectedPhotoPath!),
+                          height: 300,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      if (_isAddingWatermark)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black45,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(color: Colors.white),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Adding watermark...',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_watermarkedPhotoPath != null)
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'WATERMARKED',
+                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: (_isCapturingPhoto || _isAddingWatermark || _isUploading) ? null : _clearPhotos,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retake Photo'),
+                          style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                 ],
               )
             else
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const Text(
+                    'Step 1: Capture Photo',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: _isCapturingPhoto ? null : _capturePhoto,
                     icon: _isCapturingPhoto
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.camera_alt),
-                    label: const Text('Take Photo'),
+                    label: const Text('Take Photo with Camera'),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _isCapturingPhoto ? null : _pickPhotoFromGallery,
-                    icon: const Icon(Icons.image),
-                    label: const Text('Choose from Gallery'),
-                  ),
-                ],
-              ),
-
-            const SizedBox(height: 24),
-
-            // Watermark Section
-            if (_selectedPhotoPath != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Step 2: Add Watermark',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Watermark will include timestamp and GPS coordinates',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 12),
-                  if (_watermarkedPhotoPath != null)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            File(_watermarkedPhotoPath!),
-                            height: 250,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text(
-                            '✓ Watermark applied successfully',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    ElevatedButton.icon(
-                      onPressed: _isAddingWatermark ? null : _addWatermarkToPhoto,
-                      icon: _isAddingWatermark
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.edit),
-                      label: const Text('Add Watermark'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                  OutlinedButton.icon(
+                    onPressed: _isCapturingPhoto ? null : _pickPhotoFromGallery,
+                    icon: const Icon(Icons.photo_library),
+                    label: const Text('Choose from Gallery'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                  const SizedBox(height: 24),
+                  ),
                 ],
               ),
 

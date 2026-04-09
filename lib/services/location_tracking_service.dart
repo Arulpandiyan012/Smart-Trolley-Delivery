@@ -15,6 +15,48 @@ class LocationTrackingService {
     ));
   }
 
+  /// Checks and requests location permissions.
+  /// Returns the final permission state.
+  Future<LocationPermission> handleLocationPermission() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Test if location services are enabled.
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled don't continue
+      // accessing the position and request users of the 
+      // App to enable the location services.
+      debugPrint('Location services are disabled.');
+      return LocationPermission.unableToDetermine;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied, next time you could try
+        // requesting permissions again (this is also where
+        // Android's shouldShowRequestPermissionRationale 
+        // returned true. According to Android guidelines
+        // your App should show an explanatory UI now.
+        debugPrint('Location permissions are denied');
+        return permission;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever, handle appropriately. 
+      debugPrint('Location permissions are permanently denied, we cannot request permissions.');
+      return permission;
+    }
+
+    // If we reach here, permissions are granted and we can
+    // continue accessing the position of the device.
+    debugPrint('Location permissions granted: $permission');
+    return permission;
+  }
+
   Timer? _trackingTimer;
   late Dio _dio;
   
@@ -60,25 +102,13 @@ class LocationTrackingService {
 
   Future<void> startTracking(String orderId) async {
     
-    // Check Permissions - run in background
+    // Check Permissions
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint('Location services are disabled.');
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          debugPrint('Location permissions are denied');
-          return;
-        }
-      }
+      LocationPermission permission = await handleLocationPermission();
       
-      if (permission == LocationPermission.deniedForever) {
-        debugPrint('Location permissions are permanently denied.');
+      if (permission == LocationPermission.denied || 
+          permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.unableToDetermine) {
         return;
       }
 
