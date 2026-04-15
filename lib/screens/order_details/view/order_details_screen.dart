@@ -295,12 +295,15 @@ class OrderDetailsScreen extends StatelessWidget {
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ProofOfDeliveryScreen(order: order),
-                                    ),
-                                  ).then((result) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => BlocProvider.value(
+                                          value: context.read<DashboardBloc>(),
+                                          child: ProofOfDeliveryScreen(order: order),
+                                        ),
+                                      ),
+                                    ).then((result) {
                                     if (result == true) {
                                       Navigator.pop(context);
                                     }
