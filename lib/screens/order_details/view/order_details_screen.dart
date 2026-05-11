@@ -5,10 +5,17 @@ import 'package:smart_trolley_delivery/screens/dashboard/bloc/dashboard_bloc.dar
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_trolley_delivery/screens/order_details/view/proof_of_delivery_screen.dart';
 
-class OrderDetailsScreen extends StatelessWidget {
+class OrderDetailsScreen extends StatefulWidget {
   final OrderModel order;
 
   const OrderDetailsScreen({Key? key, required this.order}) : super(key: key);
+
+  @override
+  State<OrderDetailsScreen> createState() => _OrderDetailsScreenState();
+}
+
+class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
+  bool _tripStarted = false;
 
   Future<void> _launchMaps(String destination) async {
     // Try native Google Maps navigation first (Android/iOS)
@@ -29,7 +36,7 @@ class OrderDetailsScreen extends StatelessWidget {
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
-    final url = Uri.parse('tel:\$phoneNumber');
+    final url = Uri.parse('tel:$phoneNumber');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     } else {
@@ -43,10 +50,10 @@ class OrderDetailsScreen extends StatelessWidget {
       'delivered',
       'completed',
       'canceled',
-    ].contains(order.status.toLowerCase());
+    ].contains(widget.order.status.toLowerCase());
 
     return Scaffold(
-      appBar: AppBar(title: Text('Order ${order.orderNumber}')),
+      appBar: AppBar(title: Text('Order ${widget.order.orderNumber}')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -54,7 +61,7 @@ class OrderDetailsScreen extends StatelessWidget {
           children: [
             // Status Card
             Card(
-              color: _getStatusColor(order.status).withOpacity(0.1),
+              color: _getStatusColor(widget.order.status).withOpacity(0.1),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -69,11 +76,11 @@ class OrderDetailsScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 16),
                     ),
                     Text(
-                      order.status,
+                      widget.order.status,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: _getStatusColor(order.status),
+                        color: _getStatusColor(widget.order.status),
                       ),
                     ),
                   ],
@@ -103,7 +110,7 @@ class OrderDetailsScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            order.customerName,
+                            widget.order.customerName,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -113,7 +120,7 @@ class OrderDetailsScreen extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.phone, color: Colors.blue),
                           // Real phone number from backend
-                          onPressed: () => _makePhoneCall(order.customerPhone),
+                          onPressed: () => _makePhoneCall(widget.order.customerPhone),
                         ),
                       ],
                     ),
@@ -124,14 +131,14 @@ class OrderDetailsScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            order.customerAddress,
+                            widget.order.customerAddress,
                             style: const TextStyle(fontSize: 14),
                           ), 
                         ),
                         IconButton(
                           icon: const Icon(Icons.map, color: Colors.blue),
                           onPressed: () =>
-                              _launchMaps(order.customerAddress),
+                              _launchMaps(widget.order.customerAddress),
                         ),
                       ],
                     ),
@@ -157,7 +164,7 @@ class OrderDetailsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(order.items, style: const TextStyle(fontSize: 14)),
+                    Text(widget.order.items, style: const TextStyle(fontSize: 14)),
                     const Divider(height: 32),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -170,7 +177,7 @@ class OrderDetailsScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          order.total,
+                          widget.order.total,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -195,12 +202,12 @@ class OrderDetailsScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (order.status.toLowerCase() == 'assigned' ||
-                        order.status.toLowerCase() == 'processing')
+                    if (widget.order.status.toLowerCase() == 'assigned' ||
+                        widget.order.status.toLowerCase() == 'processing')
                       ElevatedButton(
                         onPressed: () {
                           context.read<DashboardBloc>().add(
-                            UpdateOrderStatusEvent(order.id, 'picked_up'),
+                            UpdateOrderStatusEvent(widget.order.id, 'picked_up'),
                           );
                           Navigator.pop(context);
                         },
@@ -209,22 +216,24 @@ class OrderDetailsScreen extends StatelessWidget {
                           style: TextStyle(fontSize: 16),
                         ),
                       ),
-                    if (order.status.toLowerCase() == 'picked_up' ||
-                        order.status.toLowerCase() == 'picked up')
+                    if (widget.order.status.toLowerCase() == 'picked_up' ||
+                        widget.order.status.toLowerCase() == 'picked up')
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Container(
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFF9800), Color(0xFFFF6F00)],
+                              gradient: LinearGradient(
+                                colors: !_tripStarted 
+                                  ? [const Color(0xFFFF9800), const Color(0xFFFF6F00)]
+                                  : [const Color(0xFF2196F3), const Color(0xFF1976D2)],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.orange.withOpacity(0.3),
+                                  color: (!_tripStarted ? Colors.orange : Colors.blue).withOpacity(0.3),
                                   blurRadius: 12,
                                   offset: const Offset(0, 6),
                                 ),
@@ -234,16 +243,24 @@ class OrderDetailsScreen extends StatelessWidget {
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () {
-                                  context.read<DashboardBloc>().add(
-                                    StartTripEvent(order.id),
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('🚀 Trip Started. Tracking Live...'),
-                                      backgroundColor: Colors.orange,
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
+                                  if (!_tripStarted) {
+                                    context.read<DashboardBloc>().add(
+                                      StartTripEvent(widget.order.id),
+                                    );
+                                    setState(() {
+                                      _tripStarted = true;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('🚀 Trip Started. Tracking Live...'),
+                                        backgroundColor: Colors.orange,
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                  
+                                  // Automatically Launch Maps for Mandatory Route View
+                                  _launchMaps(widget.order.customerAddress);
                                 },
                                 borderRadius: BorderRadius.circular(16),
                                 child: Padding(
@@ -254,15 +271,15 @@ class OrderDetailsScreen extends StatelessWidget {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(
-                                        Icons.play_arrow_rounded,
+                                      Icon(
+                                        !_tripStarted ? Icons.play_arrow_rounded : Icons.navigation_rounded,
                                         color: Colors.white,
                                         size: 24,
                                       ),
                                       const SizedBox(width: 12),
-                                      const Text(
-                                        'Start the Trip',
-                                        style: TextStyle(
+                                      Text(
+                                        !_tripStarted ? 'Start the Trip' : 'Navigate to Customer',
+                                        style: const TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.white,
@@ -300,7 +317,7 @@ class OrderDetailsScreen extends StatelessWidget {
                                       MaterialPageRoute(
                                         builder: (_) => BlocProvider.value(
                                           value: context.read<DashboardBloc>(),
-                                          child: ProofOfDeliveryScreen(order: order),
+                                          child: ProofOfDeliveryScreen(order: widget.order),
                                         ),
                                       ),
                                     ).then((result) {
